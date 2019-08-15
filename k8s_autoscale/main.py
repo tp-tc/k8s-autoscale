@@ -17,7 +17,7 @@ def autoscale(config):
         for worker_type in config["worker_types"]:
             # TODO: run in parallel
             handle_worker_type(worker_type)
-        logger.info("Sleeping between pools")
+        logger.info("Sleeping between polls")
         time.sleep(180)
 
 
@@ -58,11 +58,13 @@ def adjust_scale(api, target_replicas, deployment_namespace, deployment_name):
 
 
 def handle_worker_type(cfg):
+    min_replicas = cfg.get("min_replicas", 0)
     log = logger.bind(
         worker_type=cfg["name"],
         provisioner=cfg["provisioner"],
         deployment_namespace=cfg["deployment_namespace"],
         deployment_name=cfg["deployment_name"],
+        min_replicas=min_replicas,
     )
     api = get_api(cfg.get("kube_connfig"), cfg.get("kube_connfig_context"))
     log.info("Handling worker type. Getting the number of running replicas...")
@@ -84,14 +86,19 @@ def handle_worker_type(cfg):
     log = log.bind(desired=desired)
     if desired == 0:
         log.info("Zero replicas needed")
-        return
+        if running < min_replicas:
+            log.info("Using min_replicas")
+            adjust_scale(
+                api, min_replicas, cfg["deployment_namespace"], cfg["deployment_name"]
+            )
+        else:
+            return
     if desired < 0:
         log.info(f"Need to remove {abs(desired)} of {running}")
         target_replicas = running + desired
         if target_replicas < 0:
             log.info("Target %s is negative, setting to zero", target_replicas)
             target_replicas = 0
-        min_replicas = cfg.get("min_replicas", 0)
         if target_replicas < min_replicas:
             log.info(
                 "Using min_replicas %s instead of target %s",
