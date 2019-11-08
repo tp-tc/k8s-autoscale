@@ -52,8 +52,8 @@ tasks:
 
   in:
     - taskId: '${as_slugid("py37")}'
-      provisionerId: aws-provisioner-v1
-      workerType: github-worker
+      provisionerId: releng-t
+      workerType: linux
       created: {$fromNow: ''}
       deadline: {$fromNow: '4 hours'}
       payload:
@@ -80,8 +80,8 @@ tasks:
         taskId: '${as_slugid("docker_push")}'
         dependencies:
           - '${as_slugid("py37")}'
-        provisionerId: aws-provisioner-v1
-        workerType: github-worker
+        provisionerId: releng-3
+        workerType: linux
         created: {$fromNow: ''}
         deadline: {$fromNow: '24 hours'}
         payload:
@@ -126,8 +126,8 @@ tasks:
         taskId: '${as_slugid("docker_build")}'
         dependencies:
           - '${as_slugid("py37")}'
-        provisionerId: aws-provisioner-v1
-        workerType: github-worker
+        provisionerId: releng-t
+        workerType: linux
         created: {$fromNow: ''}
         deadline: {$fromNow: '24 hours'}
         payload:
