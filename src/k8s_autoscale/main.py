@@ -72,40 +72,24 @@ def handle_worker_type(cfg):
     )
     log = log.bind(running=running)
     log.info("Calculating capacity")
-    capacity = cfg["autoscale"]["args"]["max_replicas"] - running
-    log = log.bind(capacity=capacity)
+    max_replicas = cfg["autoscale"]["args"]["max_replicas"]
+    min_replicas = cfg["autoscale"]["args"]["min_replicas"]
+    log = log.bind(max_replicas=max_replicas, min_replicas=min_replicas)
 
     log.info("Checking pending")
     queue = Queue({"rootUrl": cfg["root_url"]})
     pending = queue.pendingTasks(cfg["provisioner"], cfg["worker_type"])["pendingTasks"]
     log = log.bind(pending=pending)
     log.info("Calculated desired replica count")
-    desired = get_new_worker_count(pending, running, cfg["autoscale"]["args"])
-    log = log.bind(desired=desired)
-    if desired == 0:
+    target_replicas = get_new_worker_count(pending, running, cfg["autoscale"]["args"])
+    target_replicas = max(min(target_replicas, max_replicas), min_replicas)
+    log = log.bind(target_replicas=target_replicas)
+    if target_replicas == running:
         log.info("Zero replicas needed")
-        if running < min_replicas:
-            log.info("Using min_replicas")
-            adjust_scale(api, min_replicas, cfg["deployment_namespace"], cfg["deployment_name"])
-        return
-    if desired < 0:
-        log.info(f"Need to remove {abs(desired)} of {running}")
-        target_replicas = running + desired
-        log = log.bind(target_replicas=target_replicas)
-        if target_replicas < 0:
-            log.info("Target is negative, setting to zero")
-            target_replicas = 0
-            log = log.bind(target_replicas=target_replicas)
-        if target_replicas < min_replicas:
-            log.info("Using min_replicas instead of target")
-            target_replicas = min_replicas
-        adjust_scale(api, target_replicas, cfg["deployment_namespace"], cfg["deployment_name"])
     else:
-        adjustment = min([capacity, desired])
-        log = log.bind(adjustment=adjustment)
-        log.info(f"Need to increase capacity from {running} running by {adjustment}")
-        if capacity <= 0:
-            log.info("Maximum capacity reached")
-            return
-        adjust_scale(api, running + adjustment, cfg["deployment_namespace"], cfg["deployment_name"])
+        if target_replicas < running:
+            log.info(f"Need to remove {running-target_replicas} of {running}")
+        else:
+            log.info(f"Need to increase capacity from {running} running by {target_replicas-running}")
+        adjust_scale(api, target_replicas, cfg["deployment_namespace"], cfg["deployment_name"])
     log.info("Done handling worker type")
